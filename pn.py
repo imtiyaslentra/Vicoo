@@ -746,9 +746,12 @@ Takentime = tick() - aura_table.hit_Time
 	end)
 end)
 
+-- Menggunakan task.spawn untuk menjalankan proses secara asynchronous
 task.spawn(function()
     autospamvar = RunService.Heartbeat:Connect(function()
+        -- Cek apakah auto-spam diaktifkan dan pemain berada di dalam workspace
         if not auto_spam or not workspace.Alive:FindFirstChild(local_player.Name) or training_mode then
+            -- Reset status spam
             aura_table.hit_Count = 0
             aura_table.is_Spamming = false
             aura_table.last_target = nil
@@ -757,26 +760,33 @@ task.spawn(function()
             return
         end
 
+        -- Cek apakah entitas terdekat valid dan hidup
         if closest_Entity and workspace.Alive:FindFirstChild(closest_Entity.Name) and ((not standalone and aura_table.is_Spamming) or (standalone)) then
             local playerPosition = local_player.Character.PrimaryPart.Position
             local entityPosition = closest_Entity.HumanoidRootPart.Position
             local distanceToEntity = local_player:DistanceFromCharacter(entityPosition)
 
+            -- Cek jarak untuk menentukan apakah spam bisa dilakukan
             if distanceToEntity <= aura_table.spam_Range then
                 ismyautoparryspamming = true
 
+                -- Menghitung arah dan posisi target
                 local cf = camera.CFrame
                 local direction = (entityPosition - playerPosition).Unit
                 local offset = Vector3.new(math.random(-50, 50), math.random(-10, 10), math.random(-50, 50))
                 local randomTarget = entityPosition + direction * 50 + offset
                 local targetPosition = closest_Entity_To_mouse.HumanoidRootPart.Position
+
+                -- Menyiapkan argumen untuk pengiriman server
                 local fireArgs = {
                     {[closest_Entity_To_mouse.Name] = targetPosition},
                     {targetPosition.X, targetPosition.Y}
                 }
 
+                -- Menggunakan task.defer untuk spam pengiriman server
                 task.defer(function()
                     for count = 1, potanum do
+                        -- Mengirim perintah ke server berdasarkan pengaturan
                         if auto_curve then
                             originalParryRemote:FireServer(0, CFrame.new(cf.Position, randomTarget), unpack(fireArgs))
                         else
@@ -785,19 +795,32 @@ task.spawn(function()
                     end
                 end)
             else
-                ismyautoparryspamming = false
+                ismyautoparryspamming = false -- Menonaktifkan spam jika jarak tidak memadai
             end
         else
-            ismyautoparryspamming = false
+            ismyautoparryspamming = false -- Menonaktifkan spam jika entitas tidak valid
         end
     end)
-   
+end)   
 
-local function linear_predict(a: Vector3, b: Vector3, time_volume: number)
-    time_volume = math.clamp(time_volume, 0, 1)
-    return a + (b - a) * time_volume
+-- Fungsi untuk menghitung waktu prediksi tabrakan
+local function linear_predict(player, ball)
+    local character = player.Character
+    if character then
+        local rootPart = character:FindFirstChild("HumanoidRootPart")
+        if rootPart then
+            local relativePosition = ball.Position - rootPart.Position
+            local relativeVelocity = ball.Velocity - rootPart.Velocity
+            local a = ball.Size.Magnitude / 1
+            local b = relativePosition.Magnitude
+            local c = math.sqrt(a * a + b * b
+            return (c - a) / relativeVelocity.Magnitude
+        end
+    end
+    return math.huge -- Mengembalikan nilai maksimum jika tidak ada karakter atau rootPart
 end
 
+-- Event untuk menghubungkan ke Heartbeat
 autoparryvar = RunService.Heartbeat:Connect(function()
     if not aura_Enabled or not (workspace.Alive:FindFirstChild(local_player.Name) or training_mode) then
         aura_table.hit_Time = tick() * 10
@@ -828,6 +851,7 @@ autoparryvar = RunService.Heartbeat:Connect(function()
         return
     end
 
+    -- Mendengarkan perubahan atribut 'target'
     self:GetAttributeChangedSignal('target'):Once(function()
         aura_table.canParry = true
     end)
@@ -836,6 +860,7 @@ autoparryvar = RunService.Heartbeat:Connect(function()
         return
     end
 
+    -- Mendengarkan perubahan atribut 'from'
     self:GetAttributeChangedSignal('from'):Once(function()
         aura_table.last_target = workspace.Alive:FindFirstChild(self:GetAttribute('from'))
     end)
@@ -854,7 +879,32 @@ autoparryvar = RunService.Heartbeat:Connect(function()
     local ball_Distance = (player_Position - ball_Position).Magnitude
     local ball_Dot = ball_Direction:Dot(ball_Velocity.Unit)
     local ball_Speed = ball_Velocity.Magnitude
+    
+    -- Menggunakan fungsi linear_predict yang baru
+    local predictionTime = linear_predict(local_player, self)
 
+    -- Fungsi untuk menghitung waktu prediksi tabrakan berdasarkan posisi bola dan pemain
+    local function calculatePredictionTime(ball, player)
+        local character = player.Character
+        if character then
+            local rootPart = character:FindFirstChild("HumanoidRootPart")
+            if rootPart then
+                local relativePosition = ball.Position - rootPart.Position
+                local relativeVelocity = ball.Velocity - rootPart.Velocity
+                local ballRadius = ball.Size.Magnitude / 2 -- Menggunakan setengah ukuran bola untuk menghitung jarak
+                local distanceToBall = relativePosition.Magnitude
+                local timeToCollision = distanceToBall / relativeVelocity.Magnitude
+                
+                -- Menambahkan logika lain di sini berdasarkan predictionTime jika perlu
+                return timeToCollision
+            end
+        end
+        return math.huge -- Jika tidak ada karakter atau rootPart, kembalikan nilai maksimum
+    end
+end)
+	     
+
+							 
     -- Detección de la bola
     local ball_properties = {}
     ball_properties.position = ball_Position
@@ -1015,7 +1065,7 @@ local Deb = General:NewSection('Debug','','right')
     	
     	
     	
-Par:AddToggle('Auto Parry',false,function(state)
+Par:AddToggle('Auto Parry V2',false,function(state)
     auto_spam = state
     	aura_Enabled = state
 end)
